@@ -17,15 +17,16 @@ Brute-forces cryptographic key pairs in parallel until it finds one whose destin
 ## Install
 
 Requires [libsodium](https://doc.libsodium.org/installation) and Go 1.20+.
-
+### Step 1
+#### macOS
 ```bash
-# macOS
 brew install libsodium
-
-# Linux (Debian/Ubuntu)
+```
+#### Linux
+```bash
 sudo apt install libsodium-dev
 ```
-
+### Step 2
 ```bash
 git clone https://github.com/ratspeak/revanity-go.git
 cd revanity-go
@@ -60,7 +61,7 @@ Search for multiple patterns at once with comma-separated values. Stops automati
 ./revanity-go -prefix dead,beef,cafe -no-dupe   # exactly one result per pattern
 ```
 
-Use `-no-dupe` to skip duplicate matches — the output will contain exactly one identity per pattern. Combine with `-loop` to keep going after all patterns are satisfied.
+Use `-no-dupe` to skip duplicate matches — the output will contain exactly one identity per pattern.
 
 ## Loop Mode
 
@@ -87,7 +88,7 @@ In single mode (without `-loop`), two files are saved on match:
 
 Reticulum addresses are truncated SHA-256 hashes of Ed25519/X25519 public keys. revanity-go generates random keypairs in parallel, hashes them, and checks against your target pattern. Longer patterns take exponentially longer — each additional hex character multiplies the average time by 16x.
 
-| Pattern Length | Avg Attempts | Rough Time (8 cores) |
+| Length | Attempts | Time (8 cores) |
 |---------------|-------------|---------------------|
 | 4 chars | ~65K | seconds |
 | 6 chars | ~17M | minutes |
