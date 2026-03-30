@@ -50,6 +50,7 @@ func main() {
 	workers := flag.Int("workers", 0, "Number of worker goroutines (default: auto)")
 	output := flag.String("output", "", "Output file path prefix (default: ./<dest_hash>)")
 	loop := flag.Bool("loop", false, "Search continuously, saving each match")
+	noDupe := flag.Bool("no-dupe", false, "Skip duplicate pattern matches in multi-pattern mode")
 	dryRun := flag.Bool("dry-run", false, "Show difficulty estimate without searching")
 	quiet := flag.Bool("quiet", false, "Minimal output (just the result address)")
 	showVersion := flag.Bool("version", false, "Show version")
@@ -78,6 +79,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -workers, -w NUM     Number of worker goroutines (default: auto)\n")
 		fmt.Fprintf(os.Stderr, "  -output, -o PATH     Output directory for loop mode (default: results/)\n")
 		fmt.Fprintf(os.Stderr, "  -loop, -l            Search continuously, saving each match\n")
+		fmt.Fprintf(os.Stderr, "  -no-dupe             Skip duplicate pattern matches (multi-pattern only)\n")
 		fmt.Fprintf(os.Stderr, "  -dry-run             Show difficulty estimate without searching\n")
 		fmt.Fprintf(os.Stderr, "  -quiet, -q           Minimal output (just the result address)\n")
 		fmt.Fprintf(os.Stderr, "  -version             Show version\n\n")
@@ -181,7 +183,7 @@ func main() {
 	defer stop()
 
 	if *loop || multiMode {
-		runLoopMode(gen, ctx, mode, *output, *quiet, *loop, multiMode)
+		runLoopMode(gen, ctx, mode, *output, *quiet, *loop, multiMode, *noDupe)
 		return
 	}
 
@@ -259,7 +261,7 @@ func main() {
 	}
 }
 
-func runLoopMode(gen *vanityGenerator, ctx context.Context, mode matchMode, output string, quiet bool, loop bool, multiMode bool) {
+func runLoopMode(gen *vanityGenerator, ctx context.Context, mode matchMode, output string, quiet bool, loop bool, multiMode bool, noDupe bool) {
 	outDir := output
 	if outDir == "" {
 		outDir = "results"
@@ -315,10 +317,14 @@ func runLoopMode(gen *vanityGenerator, ctx context.Context, mode matchMode, outp
 	}
 
 	onResult := func(result *generatorResult) {
-		foundCount++
 		foundPerPattern[result.PatternIdx]++
 		isDuplicate := foundPerPattern[result.PatternIdx] > 1
 
+		if noDupe && isDuplicate {
+			return
+		}
+
+		foundCount++
 		export := prepareExport(result.PrivateKey, result.IdentityHash, result.DestType, result.DestHashHex)
 
 		if err := appendResultJSONL(jsonlPath, export, result); err != nil {

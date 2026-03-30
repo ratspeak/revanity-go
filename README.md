@@ -56,10 +56,11 @@ Search for multiple patterns at once with comma-separated values. Stops automati
 
 ```bash
 ./revanity-go -prefix aa,bb,cc
-./revanity-go -prefix dead,beef,cafe,babe   # find all four
+./revanity-go -prefix dead,beef,cafe,babe       # find all four
+./revanity-go -prefix dead,beef,cafe -no-dupe   # exactly one result per pattern
 ```
 
-Combine with `-loop` to keep going after all patterns are satisfied.
+Use `-no-dupe` to skip duplicate matches — the output will contain exactly one identity per pattern. Combine with `-loop` to keep going after all patterns are satisfied.
 
 ## Loop Mode
 
