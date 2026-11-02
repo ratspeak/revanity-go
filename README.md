@@ -12,11 +12,11 @@
 
 ---
 
-Brute-forces cryptographic key pairs in parallel until it finds one whose destination hash matches your pattern. Uses libsodium's hand-optimized ARM64 assembly for X25519 scalar multiplication on Apple Silicon.
+Searches in parallel for a Reticulum destination hash matching your pattern. X25519 public-key computation uses libsodium through cgo. The default destination type is `lxmf.delivery`; the resulting LXMF address differs from the identity hash.
 
 ## Install
 
-Requires [libsodium](https://doc.libsodium.org/installation) and Go 1.20+.
+Requires [libsodium](https://doc.libsodium.org/installation), Go 1.20 or newer, Git and a C compiler. On macOS, install the Xcode command-line tools; on Debian/Ubuntu, install `build-essential` along with libsodium.
 ### Step 1
 #### macOS
 ```bash
@@ -24,7 +24,7 @@ brew install libsodium
 ```
 #### Linux
 ```bash
-sudo apt install libsodium-dev
+sudo apt install build-essential libsodium-dev
 ```
 ### Step 2
 ```bash
@@ -33,7 +33,11 @@ cd revanity-go
 CGO_ENABLED=1 go build -o revanity-go
 ```
 
+The source includes Homebrew paths for Apple Silicon. If libsodium is elsewhere, provide its include and library paths through `CGO_CFLAGS` and `CGO_LDFLAGS`. A successful build is separate from measuring search speed on that machine.
+
 ## Usage
+
+Choose one of `-prefix`, `-suffix`, `-contains` or `-regex`. The first three accept hexadecimal text; use `-dry-run` to check the pattern without starting a search.
 
 ```bash
 # Find address starting with "dead"
@@ -53,7 +57,7 @@ CGO_ENABLED=1 go build -o revanity-go
 
 ## Multi-Pattern Search
 
-Search for multiple patterns at once with comma-separated values. Stops automatically when every pattern has at least one match. Duplicates found along the way are saved too.
+Search for multiple patterns with comma-separated values. Commas also split `-regex` patterns, so a regex containing a comma cannot be passed as one pattern. Without `-loop`, the search stops after each pattern has produced a match. A result is assigned to the first matching pattern, so use distinct, non-overlapping patterns: an earlier broad pattern can prevent a later one from ever being counted. Repeated matches for a pattern are saved by default.
 
 ```bash
 ./revanity-go -prefix aa,bb,cc
@@ -61,7 +65,7 @@ Search for multiple patterns at once with comma-separated values. Stops automati
 ./revanity-go -prefix dead,beef,cafe -no-dupe   # exactly one result per pattern
 ```
 
-Use `-no-dupe` to skip duplicate matches — the output will contain exactly one identity per pattern.
+`-no-dupe` saves only the first match assigned to each pattern in that run. It does not remove results from earlier runs. Check any reported file-write errors before assuming all results were saved.
 
 ## Loop Mode
 
@@ -75,24 +79,30 @@ Search continuously, collecting every match instead of stopping at the first one
 Both multi-pattern and loop mode save results to `results/` (or the directory specified by `-output`):
 
 - `<mode>_<patterns>.jsonl` — one JSON object per line with dest hash, identity hash, matched pattern, private key (hex/base32/base64), all destination hashes, and metadata. Append-safe across runs.
-- `<dest_hash>.identity` — individual 64-byte binary keys for direct import into Sideband, Nomadnet, or any RNS application.
+- `<dest_hash>.identity` — individual 64-byte raw Reticulum identity keys. Application import procedures vary.
 
 ## Output
 
-In single mode (without `-loop`), two files are saved on match:
+With one pattern and no `-loop`, two files are saved on match:
 
-- `<address>.identity` — 64-byte binary key (import directly into Sideband/Nomadnet/any RNS app)
+- `<address>.identity` — 64-byte raw Reticulum identity key
 - `<address>.txt` — human-readable info with private key formats and import instructions
+
+`-output` is a file prefix in single-result mode and a directory in multi-pattern or loop mode. The `.identity`, `.txt` and `.jsonl` outputs contain private keys in plaintext. Keep them private and back them up; an address alone cannot restore an identity. Stop the receiving application and preserve its existing identity before following its supported import procedure.
 
 ## How It Works
 
-Reticulum addresses are truncated SHA-256 hashes of Ed25519/X25519 public keys. revanity-go generates random keypairs in parallel, hashes them, and checks against your target pattern. Longer patterns take exponentially longer — each additional hex character multiplies the average time by 16x.
+Each worker creates an Ed25519 signing key, then varies the X25519 key for each attempt. It hashes the combined public keys to obtain an identity hash, then hashes that with the destination name hash. Both hashes are truncated to 16 bytes. In multi-pattern and loop mode, the worker starts with fresh key material after each match.
 
-| Length | Attempts | Time (8 cores) |
-|---------------|-------------|---------------------|
-| 4 chars | ~65K | seconds |
-| 6 chars | ~17M | minutes |
-| 8 chars | ~4.3B | hours |
+For one exact prefix or suffix of `n` hexadecimal characters, the expected work is `16^n` attempts. Each extra character multiplies that expectation by 16. Contains and regular-expression searches have different probabilities.
+
+| Prefix or suffix length | Expected attempts |
+| --- | ---: |
+| 4 characters | 65,536 |
+| 6 characters | 16,777,216 |
+| 8 characters | 4,294,967,296 |
+
+Search time depends on measured throughput and chance. Divide the expected attempts by the displayed checks per second for a rough expectation; it is not a deadline or guarantee. The built-in difficulty label is a rough heuristic. For long patterns, use `-quiet` to skip the built-in estimate: its attempt counter can overflow and its formatting can fail before the search starts. Calculate `16^n` separately for prefixes and suffixes.
 
 ## License
 
